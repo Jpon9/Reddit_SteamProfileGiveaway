@@ -36,13 +36,30 @@ def isValidVanityId(vanityId):
 	return len(matches.groups()) > 0 if matches != None else False
 
 def GetSteamId64FromVanity(vanityId):
-	print("\tConverting vanity ID \"" + vanityId + "\" to Steam ID 64...")
-	response = json.loads(urllib2.urlopen("http://api.steampowered.com/ISteamUser/ResolveVanityURL/v0001/?key=" + settings['steam_api_key'] + "&vanityurl=" + vanityId).read())['response']['steamid']
+	print("\t\tConverting vanity ID \"" + vanityId + "\" to Steam ID 64...")
+	tries = 0
+	while True:
+		errorOccurred = False
+		try:
+			tries += 1
+			response = json.loads(urllib2.urlopen("http://api.steampowered.com/ISteamUser/ResolveVanityURL/v0001/?key=" + settings['steam_api_key'] + "&vanityurl=" + vanityId, None, 45).read())['response']['steamid']
+		except urllib2.URLError as detail:
+			print("\t\t    -> Exception caught resolving vanity ID, retrying in five seconds...")
+			errorOccurred = True
+		if errorOccurred == False:
+			break
+		if tries >= 3:
+			print("\t\t    -> Three strikes, skipping this ID.")
+			response = vanityId
+			break
+		time.sleep(5) # Give the Steam API some time before retrying
+
+	time.sleep(2) # Give the Steam API time to rest
 	if isValidSteamId64(response):
-		print("\t    -> Converted to " + response)
+		print("\t\t    -> Converted to " + response)
 		return response
 	else:
-		print("\t    -> Could not be converted.")
+		print("\t\t    -> Could not be converted.")
 		return None
 
 print("Logging in...")
@@ -66,6 +83,7 @@ print ("Grabbing entries...")
 entries = []
 authors = []
 steamIds = []
+invalid = []
 
 # Grab all the Steam profile links from the thread
 for comment in thread:
@@ -74,6 +92,7 @@ for comment in thread:
 		entry = {}
 		entry['author'] = str(comment.author)
 		entry['profile'] = profileLink
+		entry['body'] = comment.body
 		# Get the Steam ID or Vanity ID from the profile URL
 		exploded = profileLink.split('/')
 		steamId = exploded[len(exploded) - 1]
@@ -85,19 +104,81 @@ for comment in thread:
 			entry['steamid'] = steamId
 		elif isValidVanityId(steamId):
 			entry['steamid'] = GetSteamId64FromVanity(steamId)
-			time.sleep(2) # Give the Steam API some time to rest
 		if entry['steamid'] == None or entry['steamid'] in steamIds:
 			continue
 		# Add the entry and the author/IDs so we don't get duplicates
-		authors.append(str(comment.author))
+		authors.append(entry['author'])
 		steamIds.append(entry['steamid'])
 		entries.append(entry)
 		print("\tUser \"" + entry['author'] + "\" added with Steam ID \"" + entry['steamid'] + "\"")
 	else:
-		print("\tComment ID \"" + comment.id + "\" did not contain a valid profile link or was a duplicate.")
+		invalid.append({"author":str(comment.author),"id":comment.id,"body":comment.body})
 
 print("All entries grabbed.")
+print("Checking account ages...")
+
+batches = [[]]
+batchSize = 50
+
+for steamId in steamIds:
+	if len(batches[len(batches) - 1]) >= batchSize:
+		batches.append([])
+	batches[len(batches) - 1].append(steamId)
+
+profileSummaries = []
+
+batchesFetched = 0
+for batch in batches:
+	tries = 0
+	batchesFetched += 1
+	print("\tFetching Batch #" + str(batchesFetched))
+	while True:
+		errorOccurred = False
+		try:
+			tries += 1
+			summaries = json.loads(urllib2.urlopen("http://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=" + settings['steam_api_key'] + "&steamids=" + ",".join(batch), None, 60).read())['response']['players']
+		except urllib2.URLError as detail:
+			print("\t\t    -> Exception caught grabbing profile summaries, retrying in five seconds...")
+			errorOccurred = True
+		if errorOccurred == False:
+			break
+		if tries >= 3:
+			print("\t\t    -> Three strikes, skipping this batch.")
+			break
+		time.sleep(5) # Give the Steam API some time before retrying
+	print("\tBatch #" + str(batchesFetched) + " has been fetched.")
+	time.sleep(2) # Give the Steam API time to rest
+	profileSummaries += summaries
+
+print("All batches have been fetched.")
+print("There are " + str(len(profileSummaries)) + " entries.")
+print("Purging accounts made after December 5th...")
+
+acceptedEntries = []
+
+for summary in profileSummaries:
+	if summary['timecreated'] <= 1417737600:
+		acceptedEntries.append(summary['profileurl'])
+
+print("There are now " + str(len(acceptedEntries)) + " entries.")
+print("Dumping valid Steam profiles into valid-entries.json.")
+
+# Write the valid profile URLs to a JSON file for storage/debugging
+with io.open(base_path + "/valid-entries.json", 'w', encoding='utf-8') as f:
+	f.write(unicode(json.dumps(acceptedEntries, ensure_ascii=False, indent=4, separators=(',', ': '))))
+
+# Write the profile summaries to a JSON file for storage/debugging
+with io.open(base_path + "/profile-summaries.json", 'w', encoding='utf-8') as f:
+	f.write(unicode(json.dumps(profileSummaries, ensure_ascii=False, indent=4, separators=(',', ': '))))
+
+# Write the batches to a JSON file for storage/debugging
+with io.open(base_path + "/batches.json", 'w', encoding='utf-8') as f:
+	f.write(unicode(json.dumps(batches, ensure_ascii=False, indent=4, separators=(',', ': '))))
 
 # Write the entries to a JSON file for storage/debugging
 with io.open(base_path + "/entries.json", 'w', encoding='utf-8') as f:
 	f.write(unicode(json.dumps(entries, ensure_ascii=False, indent=4, separators=(',', ': '))))
+
+# Write the invalid entries to a JSON file for storage/debugging
+with io.open(base_path + "/invalid-comments.json", 'w', encoding='utf-8') as f:
+	f.write(unicode(json.dumps(invalid, ensure_ascii=False, indent=4, separators=(',', ': '))))

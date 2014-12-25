@@ -107,3 +107,5 @@ $RECYCLE.BIN/
 Python/run.bat
 Python/settings.json
 Python/entries.json
+Python/invalid-comments.json
+Python/profile-summaries.json
