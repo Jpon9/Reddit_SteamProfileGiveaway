@@ -1,0 +1,8 @@
+{
+	"bot": {
+		"username": "REDDIT_ACCOUNT_USERNAME",
+		"password": "REDDIT_ACCOUNT_PASSWORD"
+	},
+	"thread_id": "2qba92",
+	"steam_api_key": "YOUR_API_KEY_HERE"
+}

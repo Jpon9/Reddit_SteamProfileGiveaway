@@ -99,3 +99,11 @@ $RECYCLE.BIN/
 
 # Windows shortcuts
 *.lnk
+
+# =========================
+# Project-Specific Files
+# =========================
+
+Python/run.bat
+Python/settings.json
+Python/entries.json
