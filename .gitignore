@@ -109,3 +109,5 @@ Python/settings.json
 Python/entries.json
 Python/invalid-comments.json
 Python/profile-summaries.json
+Python/valid-entries.json
+Python/batches.json
