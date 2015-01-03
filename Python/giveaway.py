@@ -47,9 +47,12 @@ def GetSteamId64FromVanity(vanityId):
 		errorOccurred = False
 		try:
 			tries += 1
-			response = json.loads(urllib2.urlopen("http://api.steampowered.com/ISteamUser/ResolveVanityURL/v0001/?key=" + settings['steam_api_key'] + "&vanityurl=" + vanityId, None, 5).read())['response']['steamid']
+			response = json.loads(urllib2.urlopen("http://api.steampowered.com/ISteamUser/ResolveVanityURL/v0001/?key=" + settings['steam_api_key'] + "&vanityurl=" + vanityId, None, 10).read())['response']['steamid']
 		except urllib2.URLError as detail:
 			print("\t\t    -> Exception caught resolving vanity ID, retrying in three seconds...")
+			errorOccurred = True
+		except KeyError:
+			print("\t\t    -> Exception caught, invalid vanity ID.")
 			errorOccurred = True
 		if errorOccurred == False:
 			break
@@ -105,6 +108,9 @@ invalid = []
 
 # Grab all the Steam profile links from the thread
 for comment in thread:
+	# Ignore removed comments
+	if comment.banned_by != None:
+		continue
 	profileLink = getProfileLink(comment.body)
 	if profileLink != None and isValidProfileLink(profileLink) and str(comment.author) not in authors:
 		entry = {}
@@ -150,7 +156,7 @@ for batch in batches:
 		errorOccurred = False
 		try:
 			tries += 1
-			summaries = json.loads(urllib2.urlopen("http://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=" + settings['steam_api_key'] + "&steamids=" + ",".join(batch), None, 5).read())['response']['players']
+			summaries = json.loads(urllib2.urlopen("http://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=" + settings['steam_api_key'] + "&steamids=" + ",".join(batch), None, 10).read())['response']['players']
 		except urllib2.URLError as detail:
 			print("\t\t    -> Exception caught grabbing profile summaries, retrying in four seconds...")
 			errorOccurred = True
@@ -203,7 +209,7 @@ for item in inventory:
 	winnerObj['reddit_username'] = getRedditUsernameFromSteamProfileLink(winner)
 	winnerObj['item'] = item
 	winners.append(winnerObj)
-	print("\t" + winnerObj['reddit_username'] + " won one " + item)
+	print("\t" + winnerObj['reddit_username'] + " | " + item)
 	numOfItemsGiven += 1
 
 print("Done! (Duration: " + "{0:.2f}".format((datetime.datetime.now() - startTime).total_seconds()) + "s)\n")
